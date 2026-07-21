@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChatInterface } from './components/ChatInterface'
 import { DocumentList } from './components/DocumentList'
 import { UploadZone } from './components/UploadZone'
 import { useDocuments } from './hooks/useDocuments'
@@ -6,6 +7,16 @@ import { useDocuments } from './hooks/useDocuments'
 function App() {
   const [backendStatus, setBackendStatus] = useState('checking...')
   const { documents, loading, error, upload, delete: deleteDoc } = useDocuments()
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
+
+  const selectedDoc = useMemo(
+    () => documents.find((d) => d.id === selectedDocId) ?? null,
+    [documents, selectedDocId],
+  )
+
+  const handleSelect = useCallback((id: string) => {
+    setSelectedDocId((prev) => (prev === id ? null : id))
+  }, [])
 
   useEffect(() => {
     fetch('/api/health')
@@ -29,7 +40,22 @@ function App() {
       <h2>Documents</h2>
       {loading && <p>Loading...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
-      {!loading && <DocumentList documents={documents} onDelete={deleteDoc} />}
+      {!loading && (
+        <DocumentList
+          documents={documents}
+          onDelete={deleteDoc}
+          onSelect={handleSelect}
+          selectedId={selectedDocId}
+        />
+      )}
+
+      {selectedDoc && (
+        <>
+          <hr />
+          <h2>Ask a Question</h2>
+          <ChatInterface documentId={selectedDoc.id} documentName={selectedDoc.filename} />
+        </>
+      )}
     </main>
   )
 }
