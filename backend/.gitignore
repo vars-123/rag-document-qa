@@ -9,3 +9,6 @@ chroma_db/
 
 # environment
 .env
+
+# uploads
+uploads/
