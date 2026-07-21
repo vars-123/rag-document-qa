@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 
 from app.models.document import DocumentListResponse, DocumentResponse
 from app.services.chunking_service import chunk_text
+from app.services.embedding_service import embed_document as embed_doc
 from app.services.pdf_service import extract_text
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -118,5 +119,37 @@ async def process_document(doc_id: str) -> DocumentResponse:
         raise HTTPException(
             status_code=500, detail=f"Processing failed: {exc}"
         ) from exc
+
+    return _to_response(rec)
+
+
+@router.post("/{doc_id}/embed")
+async def embed_document(doc_id: str) -> DocumentResponse:
+    rec = _documents.get(doc_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if rec.status != "processed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document status is '{rec.status}', expected 'processed'",
+        )
+
+    if not os.path.exists(rec.file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    rec.status = "embedding"
+    try:
+        text = extract_text(rec.file_path)
+        chunks = chunk_text(text)
+        await embed_doc(doc_id, chunks)
+        rec.chunk_count = len(chunks)
+        rec.status = "embedded"
+    except ValueError as exc:
+        rec.status = "failed"
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        rec.status = "failed"
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
 
     return _to_response(rec)

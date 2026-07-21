@@ -81,8 +81,14 @@ async def test_process_document_success() -> None:
         doc = await _upload_pdf(client)
 
         with (
-            patch("app.routers.documents.extract_text", return_value="Chunk one. Chunk two. Chunk three."),
-            patch("app.routers.documents.chunk_text", return_value=["Chunk one.", "Chunk two.", "Chunk three."]),
+            patch(
+                "app.routers.documents.extract_text",
+                return_value="Chunk one. Chunk two. Chunk three.",
+            ),
+            patch(
+                "app.routers.documents.chunk_text",
+                return_value=["Chunk one.", "Chunk two.", "Chunk three."],
+            ),
         ):
             response = await client.post(f"/api/documents/{doc['id']}/process")
 
@@ -128,3 +134,63 @@ async def test_process_document_no_text() -> None:
 
     assert response.status_code == 400
     assert "No text" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_embed_document_success() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        doc = await _upload_pdf(client)
+
+        with (
+            patch("app.routers.documents.extract_text", return_value="Some text."),
+            patch("app.routers.documents.chunk_text", return_value=["Some text."]),
+            patch("app.routers.documents.embed_doc", return_value=1),
+        ):
+            await client.post(f"/api/documents/{doc['id']}/process")
+            response = await client.post(f"/api/documents/{doc['id']}/embed")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "embedded"
+    assert data["chunk_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_embed_not_processed() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        doc = await _upload_pdf(client)
+        response = await client.post(f"/api/documents/{doc['id']}/embed")
+
+    assert response.status_code == 400
+    assert "uploaded" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_embed_document_not_found() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/documents/nonexistent/embed")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_embed_no_api_key() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        doc = await _upload_pdf(client)
+
+        with (
+            patch("app.routers.documents.extract_text", return_value="Some text."),
+            patch("app.routers.documents.chunk_text", return_value=["Some text."]),
+            patch(
+                "app.routers.documents.embed_doc",
+                side_effect=ValueError("OPENAI_API_KEY is not configured"),
+            ),
+        ):
+            await client.post(f"/api/documents/{doc['id']}/process")
+            response = await client.post(f"/api/documents/{doc['id']}/embed")
+
+    assert response.status_code == 400
+    assert "OPENAI_API_KEY" in response.json()["detail"]
