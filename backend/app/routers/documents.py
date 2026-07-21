@@ -1,25 +1,47 @@
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, UploadFile
 
 from app.models.document import DocumentListResponse, DocumentResponse
+from app.services.chunking_service import chunk_text
+from app.services.pdf_service import extract_text
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 ALLOWED_CONTENT_TYPE = "application/pdf"
 
-# Resolve uploads directory relative to the backend root
 BACKEND_DIR = os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# In-memory document store: id -> metadata
-_documents: dict[str, DocumentResponse] = {}
+
+@dataclass
+class _DocumentRecord:
+    id: str
+    filename: str
+    status: str
+    uploaded_at: datetime
+    file_path: str
+    chunk_count: int = 0
+
+
+_documents: dict[str, _DocumentRecord] = {}
+
+
+def _to_response(rec: _DocumentRecord) -> DocumentResponse:
+    return DocumentResponse(
+        id=rec.id,
+        filename=rec.filename,
+        status=rec.status,
+        uploaded_at=rec.uploaded_at,
+        chunk_count=rec.chunk_count,
+    )
 
 
 @router.post("/upload", status_code=201)
@@ -44,16 +66,57 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
         f.write(contents)
 
     now = datetime.now(timezone.utc)
-    doc = DocumentResponse(
+    rec = _DocumentRecord(
         id=doc_id,
         filename=file.filename or "untitled",
         status="uploaded",
         uploaded_at=now,
+        file_path=file_path,
     )
-    _documents[doc_id] = doc
-    return doc
+    _documents[doc_id] = rec
+    return _to_response(rec)
 
 
 @router.get("")
 async def list_documents() -> DocumentListResponse:
-    return DocumentListResponse(documents=list(_documents.values()))
+    return DocumentListResponse(
+        documents=[_to_response(rec) for rec in _documents.values()]
+    )
+
+
+@router.post("/{doc_id}/process")
+async def process_document(doc_id: str) -> DocumentResponse:
+    rec = _documents.get(doc_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if rec.status != "uploaded":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document status is '{rec.status}', expected 'uploaded'",
+        )
+
+    if not os.path.exists(rec.file_path):
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    rec.status = "processing"
+    try:
+        text = extract_text(rec.file_path)
+        if not text.strip():
+            rec.status = "failed"
+            raise HTTPException(
+                status_code=400,
+                detail="No text could be extracted from the PDF",
+            )
+        chunks = chunk_text(text)
+        rec.chunk_count = len(chunks)
+        rec.status = "processed"
+    except HTTPException:
+        raise
+    except Exception as exc:
+        rec.status = "failed"
+        raise HTTPException(
+            status_code=500, detail=f"Processing failed: {exc}"
+        ) from exc
+
+    return _to_response(rec)
