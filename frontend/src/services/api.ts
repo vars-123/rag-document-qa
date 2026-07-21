@@ -18,6 +18,18 @@ export async function uploadDocument(file: File): Promise<DocumentResponse> {
   return res.json()
 }
 
+export async function processDocument(id: string): Promise<DocumentResponse> {
+  const res = await fetch(`${BASE}/documents/${id}/process`, { method: 'POST' })
+  if (!res.ok) throw new Error('Process failed')
+  return res.json()
+}
+
+export async function embedDocument(id: string): Promise<DocumentResponse> {
+  const res = await fetch(`${BASE}/documents/${id}/embed`, { method: 'POST' })
+  if (!res.ok) throw new Error('Embed failed')
+  return res.json()
+}
+
 export async function deleteDocument(id: string): Promise<void> {
   const res = await fetch(`${BASE}/documents/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error('Delete failed')

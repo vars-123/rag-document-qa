@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DocumentResponse } from '../types/document'
-import { fetchDocuments, uploadDocument, deleteDocument } from '../services/api'
+import { fetchDocuments, uploadDocument, processDocument, embedDocument, deleteDocument } from '../services/api'
 
 export function useDocuments() {
   const [documents, setDocuments] = useState<DocumentResponse[]>([])
@@ -36,6 +36,30 @@ export function useDocuments() {
     [load],
   )
 
+  const process = useCallback(
+    async (id: string) => {
+      try {
+        await processDocument(id)
+        await load()
+      } catch {
+        setError('Process failed')
+      }
+    },
+    [load],
+  )
+
+  const embed = useCallback(
+    async (id: string) => {
+      try {
+        await embedDocument(id)
+        await load()
+      } catch {
+        setError('Embed failed')
+      }
+    },
+    [load],
+  )
+
   const delete_ = useCallback(
     async (id: string) => {
       try {
@@ -48,5 +72,5 @@ export function useDocuments() {
     [load],
   )
 
-  return { documents, loading, error, upload, delete: delete_ }
+  return { documents, loading, error, upload, process, embed, delete: delete_ }
 }

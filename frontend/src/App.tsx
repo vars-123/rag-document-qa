@@ -6,7 +6,7 @@ import { useDocuments } from './hooks/useDocuments'
 
 function App() {
   const [backendStatus, setBackendStatus] = useState('checking...')
-  const { documents, loading, error, upload, delete: deleteDoc } = useDocuments()
+  const { documents, loading, error, upload, process, embed, delete: deleteDoc } = useDocuments()
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
 
   const selectedDoc = useMemo(
@@ -44,6 +44,8 @@ function App() {
         <DocumentList
           documents={documents}
           onDelete={deleteDoc}
+          onProcess={process}
+          onEmbed={embed}
           onSelect={handleSelect}
           selectedId={selectedDocId}
         />
