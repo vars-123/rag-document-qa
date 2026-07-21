@@ -12,7 +12,8 @@ async def embed_document(document_id: str, chunks: list[str]) -> int:
 
     ids = [f"{document_id}_{i}" for i in range(len(chunks))]
     metadatas = [
-        {"document_id": document_id, "chunk_index": i} for i in range(len(chunks))
+        {"document_id": document_id, "chunk_index": i, "text": chunks[i]}
+        for i in range(len(chunks))
     ]
 
     add_embeddings(
@@ -23,3 +24,7 @@ async def embed_document(document_id: str, chunks: list[str]) -> int:
     )
 
     return len(chunks)
+
+
+async def embed_query(text: str) -> list[float]:
+    return await _embeddings_model.aembed_query(text)
