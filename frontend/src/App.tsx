@@ -6,7 +6,7 @@ import { useDocuments } from './hooks/useDocuments'
 
 function App() {
   const [backendStatus, setBackendStatus] = useState('checking...')
-  const { documents, loading, error, upload, process, embed, delete: deleteDoc } = useDocuments()
+  const { documents, loading, error, clearError, activeOps, upload, process, embed, delete: deleteDoc } = useDocuments()
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
 
   const selectedDoc = useMemo(
@@ -39,7 +39,12 @@ function App() {
 
       <h2>Documents</h2>
       {loading && <p>Loading...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && (
+        <p style={{ color: 'red', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span>{error}</span>
+          <button onClick={clearError} style={{ fontSize: 10 }}>x</button>
+        </p>
+      )}
       {!loading && (
         <DocumentList
           documents={documents}
@@ -48,6 +53,7 @@ function App() {
           onEmbed={embed}
           onSelect={handleSelect}
           selectedId={selectedDocId}
+          activeOps={activeOps}
         />
       )}
 
