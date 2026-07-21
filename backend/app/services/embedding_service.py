@@ -1,19 +1,14 @@
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
-from app.config import settings
 from app.services.vector_service import add_embeddings
+
+_embeddings_model = HuggingFaceEmbeddings(
+    model_name="all-MiniLM-L6-v2",
+)
 
 
 async def embed_document(document_id: str, chunks: list[str]) -> int:
-    if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY is not configured")
-
-    embeddings_model = OpenAIEmbeddings(
-        model="text-embedding-3-small",
-        openai_api_key=settings.openai_api_key,
-    )
-
-    vectors = await embeddings_model.aembed_documents(chunks)
+    vectors = await _embeddings_model.aembed_documents(chunks)
 
     ids = [f"{document_id}_{i}" for i in range(len(chunks))]
     metadatas = [
