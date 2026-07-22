@@ -3,6 +3,7 @@ import { ChatInterface } from './components/ChatInterface'
 import { DocumentList } from './components/DocumentList'
 import { UploadZone } from './components/UploadZone'
 import { useDocuments } from './hooks/useDocuments'
+import { API_BASE_URL } from './services/api'
 
 function App() {
   const [backendStatus, setBackendStatus] = useState('checking...')
@@ -19,7 +20,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch(`${API_BASE_URL}/health`)
       .then((res) => res.json())
       .then((data) => setBackendStatus(data.status))
       .catch(() => setBackendStatus('unreachable'))

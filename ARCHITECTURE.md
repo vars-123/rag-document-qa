@@ -159,7 +159,13 @@ Routers **must not** contain business logic — they validate input, call a serv
 | `OPENAI_API_KEY`   | Yes      | —                  | OpenAI API key                   |
 | `CHROMA_DB_PATH`   | No       | `./chroma_db`      | Persistence path for ChromaDB    |
 | `DATABASE_URL`     | No       | `sqlite:///./chat.db` | Database for chat history     |
-| `FRONTEND_URL`     | No       | `http://localhost:5173` | Allowed CORS origin          |
+| `FRONTEND_URL`     | No       | `http://localhost:5173` | Comma-separated allowed CORS origins |
+
+### Frontend Environment
+
+| Variable            | Required | Default | Description |
+|---------------------|----------|---------|-------------|
+| `VITE_API_BASE_URL` | No       | `/api`  | Backend API base URL used by the frontend |
 
 ---
 

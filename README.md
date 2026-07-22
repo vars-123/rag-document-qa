@@ -14,7 +14,7 @@ The system retrieves relevant information from uploaded documents using semantic
 
 Current Phase:
 
-- Phase 9 - UI Improvements
+- Phase 10 - Deployment
 
 Completed milestones:
 
@@ -25,6 +25,7 @@ Completed milestones:
 - Streaming responses
 - Chat history and session handling
 - Responsive UI refresh
+- Deployment readiness
 
 ---
 
@@ -77,6 +78,8 @@ backend/
 ## Running the Project
 
 Documentation will be added as development progresses.
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the production setup guide.
 
 ---
 

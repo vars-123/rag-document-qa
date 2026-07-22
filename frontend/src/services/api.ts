@@ -1,7 +1,8 @@
 import type { DocumentResponse } from '../types/document'
 import type { ChatRequest, ChatMessage } from '../types/chat'
 
-const BASE = '/api'
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '')
+const BASE = API_BASE_URL
 
 async function parseError(res: Response): Promise<string> {
   try {
