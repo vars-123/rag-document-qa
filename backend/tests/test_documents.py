@@ -1,11 +1,12 @@
 import io
+import os
 from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient, ASGITransport
 
 from app.main import app
-from app.routers.documents import _documents
+from app.routers.documents import UPLOAD_DIR, _documents
 
 
 @pytest.fixture(autouse=True)
@@ -194,3 +195,34 @@ async def test_embed_no_api_key() -> None:
 
     assert response.status_code == 400
     assert "OPENAI_API_KEY" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_delete_document_success() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        doc = await _upload_pdf(client)
+        file_path = os.path.join(UPLOAD_DIR, f"{doc['id']}.pdf")
+
+        with (
+            patch("app.routers.documents.delete_collection", return_value=None),
+            patch("app.routers.documents.delete_document_history", return_value=None),
+        ):
+            response = await client.delete(f"/api/documents/{doc['id']}")
+
+        list_response = await client.get("/api/documents")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "deleted"}
+    assert not os.path.exists(file_path)
+    assert list_response.json()["documents"] == []
+    assert doc["id"] not in _documents
+
+
+@pytest.mark.asyncio
+async def test_delete_document_not_found() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.delete("/api/documents/nonexistent")
+
+    assert response.status_code == 404

@@ -8,7 +8,9 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from app.models.document import DocumentListResponse, DocumentResponse
 from app.services.chunking_service import chunk_text
 from app.services.embedding_service import embed_document as embed_doc
+from app.services.chat_history_service import delete_document_history
 from app.services.pdf_service import extract_text
+from app.services.vector_service import delete_collection
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -153,3 +155,29 @@ async def embed_document(doc_id: str) -> DocumentResponse:
         raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
 
     return _to_response(rec)
+
+
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str) -> dict[str, str]:
+    rec = _documents.pop(doc_id, None)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    try:
+        delete_collection(doc_id)
+    except Exception:
+        pass
+
+    try:
+        if os.path.exists(rec.file_path):
+            os.remove(rec.file_path)
+    except Exception as exc:
+        _documents[doc_id] = rec
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {exc}") from exc
+
+    try:
+        delete_document_history(doc_id)
+    except Exception:
+        pass
+
+    return {"status": "deleted"}

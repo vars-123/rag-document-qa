@@ -135,3 +135,25 @@ def clear_chat_history() -> None:
     with _db() as connection:
         connection.execute("DELETE FROM chat_messages")
         connection.execute("DELETE FROM chat_sessions")
+
+
+def delete_document_history(document_id: str) -> None:
+    initialize_chat_history()
+    with _db() as connection:
+        session_rows = connection.execute(
+            "SELECT session_id FROM chat_sessions WHERE document_id = ?",
+            (document_id,),
+        ).fetchall()
+        session_ids = [row["session_id"] for row in session_rows]
+
+        if session_ids:
+            placeholders = ",".join(["?"] * len(session_ids))
+            connection.execute(
+                f"DELETE FROM chat_messages WHERE session_id IN ({placeholders})",
+                session_ids,
+            )
+
+        connection.execute(
+            "DELETE FROM chat_sessions WHERE document_id = ?",
+            (document_id,),
+        )
