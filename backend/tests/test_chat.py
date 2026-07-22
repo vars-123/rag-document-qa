@@ -6,11 +6,13 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.routers.documents import _documents
+from app.services.chat_history_service import clear_chat_history
 
 
 @pytest.fixture(autouse=True)
 def clear_store() -> None:
     _documents.clear()
+    clear_chat_history()
 
 
 async def _upload_and_embed(client: AsyncClient) -> dict:
@@ -37,6 +39,7 @@ async def test_chat_streams_response() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         doc = await _upload_and_embed(client)
+        session_id = "session-123"
 
         with (
             patch("app.routers.chat.retrieve_context", return_value=["Some context."]),
@@ -47,11 +50,26 @@ async def test_chat_streams_response() -> None:
         ):
             response = await client.post(
                 "/api/chat",
-                json={"document_id": doc["id"], "question": "test query"},
+                json={
+                    "document_id": doc["id"],
+                    "question": "test query",
+                    "session_id": session_id,
+                },
             )
+        assert response.status_code == 200
+        assert response.text == "Hello world"
+        assert response.headers["x-chat-session-id"] == session_id
 
-    assert response.status_code == 200
-    assert response.text == "Hello world"
+        history_response = await client.get(f"/api/chat/history?session_id={session_id}")
+        assert history_response.status_code == 200
+        history = history_response.json()
+        assert history["session_id"] == session_id
+        assert [message["role"] for message in history["messages"]] == [
+            "user",
+            "assistant",
+        ]
+        assert history["messages"][0]["content"] == "test query"
+        assert history["messages"][1]["content"] == "Hello world"
 
 
 @pytest.mark.asyncio

@@ -14,7 +14,16 @@ The system retrieves relevant information from uploaded documents using semantic
 
 Current Phase:
 
-- Project Initialization
+- Phase 8 - Chat History
+
+Completed milestones:
+
+- PDF upload
+- PDF processing
+- Embedding generation
+- Question answering
+- Streaming responses
+- Chat history and session handling
 
 ---
 

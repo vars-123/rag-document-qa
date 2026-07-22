@@ -34,7 +34,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 }
 
 export function ChatInterface({ documentId, documentName }: ChatInterfaceProps) {
-  const { messages, streaming, error, send, clear } = useChat(documentId)
+  const { messages, streaming, error, send, clear, loadingHistory } = useChat(documentId)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleSubmit = (e: FormEvent) => {
@@ -74,7 +74,8 @@ export function ChatInterface({ documentId, documentName }: ChatInterfaceProps) 
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
-        {messages.length === 0 && (
+        {loadingHistory && <p style={{ color: '#9ca3af' }}>Loading conversation history...</p>}
+        {!loadingHistory && messages.length === 0 && (
           <p style={{ color: '#9ca3af' }}>Ask a question about this document.</p>
         )}
         {messages.map((msg, i) => (
