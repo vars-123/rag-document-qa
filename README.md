@@ -14,7 +14,7 @@ The system retrieves relevant information from uploaded documents using semantic
 
 Current Phase:
 
-- Phase 8 - Chat History
+- Phase 9 - UI Improvements
 
 Completed milestones:
 
@@ -24,6 +24,7 @@ Completed milestones:
 - Question answering
 - Streaming responses
 - Chat history and session handling
+- Responsive UI refresh
 
 ---
 

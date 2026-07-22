@@ -3,4 +3,5 @@ export interface DocumentResponse {
   filename: string
   status: string
   uploaded_at: string
+  chunk_count: number
 }
