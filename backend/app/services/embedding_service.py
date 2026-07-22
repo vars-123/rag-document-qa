@@ -1,5 +1,6 @@
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
+from app.config import settings
 from app.services.vector_service import add_embeddings
 
 _document_embeddings_model: GoogleGenerativeAIEmbeddings | None = None
@@ -10,7 +11,7 @@ def _get_document_embeddings_model() -> GoogleGenerativeAIEmbeddings:
     global _document_embeddings_model
     if _document_embeddings_model is None:
         _document_embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="gemini-embedding-2",
+            model=settings.embedding_model,
             task_type="RETRIEVAL_DOCUMENT",
             output_dimensionality=768,
         )
@@ -21,7 +22,7 @@ def _get_query_embeddings_model() -> GoogleGenerativeAIEmbeddings:
     global _query_embeddings_model
     if _query_embeddings_model is None:
         _query_embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="gemini-embedding-2",
+            model=settings.embedding_model,
             task_type="RETRIEVAL_QUERY",
             output_dimensionality=768,
         )

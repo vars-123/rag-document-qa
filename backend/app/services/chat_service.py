@@ -1,5 +1,6 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from app.config import settings
 from app.services.embedding_service import embed_query
 from app.services.vector_service import similarity_search
 
@@ -16,7 +17,7 @@ def _get_llm() -> ChatGoogleGenerativeAI:
     global _llm
     if _llm is None:
         _llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model=settings.llm_model,
             temperature=0,
             streaming=True,
         )

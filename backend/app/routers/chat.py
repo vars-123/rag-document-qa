@@ -51,8 +51,8 @@ async def chat(body: ChatRequest):
                 for chunk in stream:
                     answer_parts.append(chunk)
                     yield chunk
-        except Exception:
-            raise
+        except Exception as exc:
+            yield f"\n\n[Error generating response: {exc}]"
         else:
             add_message(session_id, "assistant", "".join(answer_parts))
 
