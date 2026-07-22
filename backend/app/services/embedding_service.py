@@ -1,21 +1,35 @@
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from app.services.vector_service import add_embeddings
 
-_embeddings_model: HuggingFaceEmbeddings | None = None
+_document_embeddings_model: GoogleGenerativeAIEmbeddings | None = None
+_query_embeddings_model: GoogleGenerativeAIEmbeddings | None = None
 
 
-def _get_embeddings_model() -> HuggingFaceEmbeddings:
-    global _embeddings_model
-    if _embeddings_model is None:
-        _embeddings_model = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
+def _get_document_embeddings_model() -> GoogleGenerativeAIEmbeddings:
+    global _document_embeddings_model
+    if _document_embeddings_model is None:
+        _document_embeddings_model = GoogleGenerativeAIEmbeddings(
+            model="gemini-embedding-2",
+            task_type="RETRIEVAL_DOCUMENT",
+            output_dimensionality=768,
         )
-    return _embeddings_model
+    return _document_embeddings_model
+
+
+def _get_query_embeddings_model() -> GoogleGenerativeAIEmbeddings:
+    global _query_embeddings_model
+    if _query_embeddings_model is None:
+        _query_embeddings_model = GoogleGenerativeAIEmbeddings(
+            model="gemini-embedding-2",
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=768,
+        )
+    return _query_embeddings_model
 
 
 async def embed_document(document_id: str, chunks: list[str]) -> int:
-    vectors = await _get_embeddings_model().aembed_documents(chunks)
+    vectors = await _get_document_embeddings_model().aembed_documents(chunks)
 
     ids = [f"{document_id}_{i}" for i in range(len(chunks))]
     metadatas = [
@@ -34,4 +48,4 @@ async def embed_document(document_id: str, chunks: list[str]) -> int:
 
 
 async def embed_query(text: str) -> list[float]:
-    return await _get_embeddings_model().aembed_query(text)
+    return await _get_query_embeddings_model().aembed_query(text)

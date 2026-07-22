@@ -4,7 +4,7 @@
 
 A production-quality Retrieval-Augmented Generation (RAG) application that enables users to upload PDF documents and ask questions in natural language.
 
-The system retrieves relevant information from uploaded documents using semantic search and generates accurate responses with local model providers.
+The system retrieves relevant information from uploaded documents using semantic search and generates accurate responses with Gemini.
 
 ---
 
@@ -44,8 +44,8 @@ Completed milestones:
 ### AI
 
 - LangChain
-- Ollama
-- Hugging Face embeddings
+- Gemini
+- Google Generative AI embeddings
 - ChromaDB
 
 ### Deployment

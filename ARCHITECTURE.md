@@ -19,7 +19,7 @@ FastAPI Backend  (Python, Pydantic)
   │
   ├── PDF Upload → PDF Service → Chunking Service → Embedding Service → ChromaDB
   │
-  └── Question → Retrieval Service → Context Builder → Chat Service → Ollama → Streaming Response
+  └── Question → Retrieval Service → Context Builder → Chat Service → Gemini → Streaming Response
 ```
 
 ---
@@ -119,7 +119,7 @@ rag-document-qa/
 Upload PDF → Validate (.pdf, size) → Store file on disk
   → PDF Service (extract text with pdfplumber)
   → Chunking Service (split into overlapping chunks, ~500 tokens)
-  → Embedding Service (local Hugging Face embeddings)
+  → Embedding Service (Gemini embeddings)
   → Vector Service (store in ChromaDB collection)
   → Return document ID + status
 ```
@@ -144,9 +144,9 @@ User sends question + document_id
 |--------------------|---------------------------------------------------------|
 | `pdf_service`      | Extract raw text from PDF using pdfplumber              |
 | `chunking_service` | Split text using LangChain `RecursiveCharacterTextSplitter` |
-| `embedding_service`| Generate embeddings via `HuggingFaceEmbeddings` (LangChain)   |
+| `embedding_service`| Generate embeddings via `GoogleGenerativeAIEmbeddings` (LangChain)   |
 | `vector_service`   | CRUD on ChromaDB collections; similarity search          |
-| `chat_service`     | Build prompt, stream response from `ChatOllama`          |
+| `chat_service`     | Build prompt, stream response from `ChatGoogleGenerativeAI`          |
 
 Routers **must not** contain business logic — they validate input, call a service, and return the response.
 
@@ -156,6 +156,7 @@ Routers **must not** contain business logic — they validate input, call a serv
 
 | Variable           | Required | Default            | Description                      |
 |--------------------|----------|--------------------|----------------------------------|
+| `GOOGLE_API_KEY`   | Yes      | —                  | Gemini API key                   |
 | `CHROMA_DB_PATH`   | No       | `./chroma_db`      | Persistence path for ChromaDB    |
 | `DATABASE_URL`     | No       | `sqlite:///./chat.db` | Database for chat history     |
 | `FRONTEND_URL`     | No       | `http://localhost:5173` | Comma-separated allowed CORS origins |

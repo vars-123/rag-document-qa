@@ -1,4 +1,4 @@
-from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.services.embedding_service import embed_query
 from app.services.vector_service import similarity_search
@@ -9,11 +9,18 @@ SYSTEM_PROMPT = (
     "say so honestly. Do not make up information."
 )
 
-_llm = ChatOllama(
-    model="llama3.2",
-    temperature=0,
-    streaming=True,
-)
+_llm: ChatGoogleGenerativeAI | None = None
+
+
+def _get_llm() -> ChatGoogleGenerativeAI:
+    global _llm
+    if _llm is None:
+        _llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0,
+            streaming=True,
+        )
+    return _llm
 
 
 async def retrieve_context(document_id: str, question: str, k: int = 5) -> list[str]:
@@ -31,7 +38,7 @@ async def generate_stream(question: str, context_chunks: list[str]):
         ("human", f"Context:\n{context}\n\nQuestion:\n{question}\n\nAnswer:"),
     ]
 
-    async for chunk in _llm.astream(messages):
+    async for chunk in _get_llm().astream(messages):
         content = chunk.content
-        if content:
+        if isinstance(content, str) and content:
             yield content
