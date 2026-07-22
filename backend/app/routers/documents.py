@@ -23,6 +23,10 @@ BACKEND_DIR = os.path.dirname(
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+NO_TEXT_ERROR = (
+    "No text could be extracted from the PDF. This may be a scanned or image-only PDF."
+)
+
 
 @dataclass
 class _DocumentRecord:
@@ -107,10 +111,7 @@ async def process_document(doc_id: str) -> DocumentResponse:
         text = extract_text(rec.file_path)
         if not text.strip():
             rec.status = "failed"
-            raise HTTPException(
-                status_code=400,
-                detail="No text could be extracted from the PDF",
-            )
+            raise HTTPException(status_code=400, detail=NO_TEXT_ERROR)
         chunks = chunk_text(text)
         rec.chunk_count = len(chunks)
         rec.status = "processed"
@@ -143,6 +144,9 @@ async def embed_document(doc_id: str) -> DocumentResponse:
     rec.status = "embedding"
     try:
         text = extract_text(rec.file_path)
+        if not text.strip():
+            rec.status = "failed"
+            raise HTTPException(status_code=400, detail=NO_TEXT_ERROR)
         chunks = chunk_text(text)
         await embed_doc(doc_id, chunks)
         rec.chunk_count = len(chunks)

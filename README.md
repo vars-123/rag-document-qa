@@ -82,6 +82,11 @@ Documentation will be added as development progresses.
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for the production setup guide.
 
+## Known Limitations
+
+- Text-based PDFs process correctly.
+- Scanned or image-only PDFs are not supported yet because OCR is still a future enhancement.
+
 ---
 
 ## License
