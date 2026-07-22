@@ -4,7 +4,7 @@
 
 A production-quality Retrieval-Augmented Generation (RAG) application that enables users to upload PDF documents and ask questions in natural language.
 
-The system retrieves relevant information from uploaded documents using semantic search and generates accurate responses using OpenAI.
+The system retrieves relevant information from uploaded documents using semantic search and generates accurate responses with local model providers.
 
 ---
 
@@ -44,7 +44,8 @@ Completed milestones:
 ### AI
 
 - LangChain
-- OpenAI API
+- Ollama
+- Hugging Face embeddings
 - ChromaDB
 
 ### Deployment

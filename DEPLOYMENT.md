@@ -15,7 +15,6 @@ The frontend and backend are deployed separately, so the frontend must know the 
 
 Set these in Railway or Render:
 
-- `OPENAI_API_KEY` - required for LLM and embedding providers used by the backend
 - `CHROMA_DB_PATH` - local persistence path for ChromaDB
 - `DATABASE_URL` - SQLite path used for chat history
 - `FRONTEND_URL` - comma-separated list of allowed frontend origins for CORS
@@ -66,6 +65,7 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 - Document processing and embedding still work
 - Chat streaming responds from the backend domain
 - Chat history is available for the selected document
+- Ollama is reachable from the backend runtime, or the chat layer is swapped to a hosted model provider before deployment
 
 ---
 
@@ -73,6 +73,5 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 - A blank frontend usually means `VITE_API_BASE_URL` is missing or wrong.
 - CORS errors usually mean the frontend domain is missing from `FRONTEND_URL`.
-- Failed chat or embedding requests often mean the backend runtime cannot reach its model provider.
+- Failed chat or embedding requests often mean the backend runtime cannot reach Ollama or download the local embedding model.
 - If chat history resets unexpectedly, check whether the SQLite file is stored on ephemeral disk.
-

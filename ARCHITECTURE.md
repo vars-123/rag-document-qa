@@ -19,7 +19,7 @@ FastAPI Backend  (Python, Pydantic)
   │
   ├── PDF Upload → PDF Service → Chunking Service → Embedding Service → ChromaDB
   │
-  └── Question → Retrieval Service → Context Builder → Chat Service → OpenAI → Streaming Response
+  └── Question → Retrieval Service → Context Builder → Chat Service → Ollama → Streaming Response
 ```
 
 ---
@@ -119,7 +119,7 @@ rag-document-qa/
 Upload PDF → Validate (.pdf, size) → Store file on disk
   → PDF Service (extract text with pdfplumber)
   → Chunking Service (split into overlapping chunks, ~500 tokens)
-  → Embedding Service (OpenAI text-embedding-3-small)
+  → Embedding Service (local Hugging Face embeddings)
   → Vector Service (store in ChromaDB collection)
   → Return document ID + status
 ```
@@ -131,7 +131,7 @@ User sends question + document_id
   → Vector Service (semantic search in ChromaDB, top-k chunks)
   → Context Builder (concatenate retrieved chunks)
   → Chat Service (build prompt with context + question)
-  → OpenAI streaming response (ChatCompletion with stream=True)
+  → Local LLM streaming response
   → SSE stream to frontend
   → Frontend renders tokens as they arrive
 ```
@@ -144,9 +144,9 @@ User sends question + document_id
 |--------------------|---------------------------------------------------------|
 | `pdf_service`      | Extract raw text from PDF using pdfplumber              |
 | `chunking_service` | Split text using LangChain `RecursiveCharacterTextSplitter` |
-| `embedding_service`| Generate embeddings via `OpenAIEmbeddings` (LangChain)   |
+| `embedding_service`| Generate embeddings via `HuggingFaceEmbeddings` (LangChain)   |
 | `vector_service`   | CRUD on ChromaDB collections; similarity search          |
-| `chat_service`     | Build prompt, stream response from `ChatOpenAI`          |
+| `chat_service`     | Build prompt, stream response from `ChatOllama`          |
 
 Routers **must not** contain business logic — they validate input, call a service, and return the response.
 
@@ -156,7 +156,6 @@ Routers **must not** contain business logic — they validate input, call a serv
 
 | Variable           | Required | Default            | Description                      |
 |--------------------|----------|--------------------|----------------------------------|
-| `OPENAI_API_KEY`   | Yes      | —                  | OpenAI API key                   |
 | `CHROMA_DB_PATH`   | No       | `./chroma_db`      | Persistence path for ChromaDB    |
 | `DATABASE_URL`     | No       | `sqlite:///./chat.db` | Database for chat history     |
 | `FRONTEND_URL`     | No       | `http://localhost:5173` | Comma-separated allowed CORS origins |
@@ -174,5 +173,5 @@ Routers **must not** contain business logic — they validate input, call a serv
 1. **Service layer abstraction** — routers stay thin; all logic lives in services. Enables unit testing without HTTP.
 2. **Streaming via SSE** — Server-Sent Events for chat responses. Simpler than WebSockets for unidirectional streaming.
 3. **ChromaDB embedded** — runs in-process. Simple to set up; no external server needed. Can migrate to self-hosted later.
-4. **LangChain for orchestration** — provides standard interfaces for text splitting, embeddings, and LLM calls. Reduces boilerplate.
+4. **LangChain for orchestration** — provides standard interfaces for text splitting, embeddings, and local LLM calls. Reduces boilerplate.
 5. **Pydantic v2** — used for both config (`BaseSettings`) and API models (`BaseModel`). Single source of truth for data shapes.

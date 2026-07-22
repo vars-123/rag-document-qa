@@ -187,14 +187,14 @@ async def test_embed_no_api_key() -> None:
             patch("app.routers.documents.chunk_text", return_value=["Some text."]),
             patch(
                 "app.routers.documents.embed_doc",
-                side_effect=ValueError("OPENAI_API_KEY is not configured"),
+                side_effect=ValueError("Embedding model is not configured"),
             ),
         ):
             await client.post(f"/api/documents/{doc['id']}/process")
             response = await client.post(f"/api/documents/{doc['id']}/embed")
 
     assert response.status_code == 400
-    assert "OPENAI_API_KEY" in response.json()["detail"]
+    assert "Embedding model" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

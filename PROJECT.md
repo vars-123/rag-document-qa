@@ -24,7 +24,7 @@ The application should demonstrate:
 - FastAPI Backend Development
 - Vector Search
 - Semantic Search
-- OpenAI Integration
+- Local Model Integration
 - Cloud Deployment
 - Professional Git Workflow
 
@@ -70,7 +70,7 @@ The application should support:
 
 ### Embeddings
 
-Generate embeddings for every chunk using OpenAI embeddings.
+Generate embeddings for every chunk using local embeddings.
 
 Store embeddings inside ChromaDB.
 
@@ -166,7 +166,7 @@ The application should be:
 - FastAPI
 - LangChain
 - ChromaDB
-- OpenAI API
+- Local LLMs
 - Pydantic
 
 ---
@@ -235,7 +235,7 @@ ChromaDB
 
 ↓
 
-OpenAI API
+Local LLMs
 
 ↓
 
@@ -536,7 +536,7 @@ The project is considered complete when:
 - Embeddings are generated.
 - ChromaDB stores vectors.
 - Questions retrieve relevant chunks.
-- OpenAI generates accurate responses.
+- Local models generate accurate responses.
 - Responses stream to the UI.
 - Frontend is deployed on Vercel.
 - Backend is deployed on Railway.
