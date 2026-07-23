@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     chroma_db_path: str = "./chroma_db"
     database_url: str = "sqlite:///./chat.db"
     frontend_url: str = "http://localhost:5173"
-    llm_model: str = "gemini-2.5-flash"
+    llm_model: str = "gemini-flash-lite-latest"
     embedding_model: str = "gemini-embedding-2"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
