@@ -1,6 +1,6 @@
 import io
 import os
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient, ASGITransport
@@ -22,10 +22,33 @@ async def _upload_pdf(
     content: bytes = b"%PDF-1.4 mock",
     filename: str = "test.pdf",
 ) -> dict:
-    response = await client.post(
-        "/api/documents/upload",
-        files={"file": (filename, io.BytesIO(content), "application/pdf")},
-    )
+    with patch(
+        "app.routers.documents.run_pipeline", new=AsyncMock(return_value=None)
+    ):
+        response = await client.post(
+            "/api/documents/upload",
+            files={"file": (filename, io.BytesIO(content), "application/pdf")},
+        )
+    assert response.status_code == 201
+    return response.json()
+
+
+async def _upload_and_embed(client: AsyncClient, filename: str = "test.pdf") -> dict:
+    with (
+        patch(
+            "app.routers.documents.extract_text",
+            return_value="Chunk one. Chunk two.",
+        ),
+        patch(
+            "app.routers.documents.chunk_text",
+            return_value=["Chunk one.", "Chunk two."],
+        ),
+        patch("app.routers.documents.embed_doc", new=AsyncMock(return_value=2)),
+    ):
+        response = await client.post(
+            "/api/documents/upload",
+            files={"file": (filename, io.BytesIO(b"%PDF-1.4 mock"), "application/pdf")},
+        )
     assert response.status_code == 201
     return response.json()
 
@@ -37,6 +60,7 @@ async def test_upload_pdf() -> None:
         data = await _upload_pdf(client)
     assert data["filename"] == "test.pdf"
     assert data["status"] == "uploaded"
+    assert data["error"] is None
     assert "id" in data
     assert "uploaded_at" in data
 
@@ -67,6 +91,40 @@ async def test_upload_rejects_large_file() -> None:
 
 
 @pytest.mark.asyncio
+async def test_upload_auto_pipeline_reaches_embedded() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
+        doc = await _upload_and_embed(client)
+        response = await client.get("/api/documents")
+
+    documents = response.json()["documents"]
+    assert documents[0]["id"] == doc["id"]
+    assert documents[0]["status"] == "embedded"
+    assert documents[0]["chunk_count"] == 2
+    assert documents[0]["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_pipeline_failure_marks_document_failed() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
+        with patch("app.routers.documents.extract_text", return_value="   "):
+            response = await client.post(
+                "/api/documents/upload",
+                files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4 mock"), "application/pdf")},
+            )
+        assert response.status_code == 201
+        doc_id = response.json()["id"]
+
+        list_response = await client.get("/api/documents")
+
+    document = list_response.json()["documents"][0]
+    assert document["id"] == doc_id
+    assert document["status"] == "failed"
+    assert "No text" in document["error"]
+
+
+@pytest.mark.asyncio
 async def test_list_documents() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
@@ -79,125 +137,48 @@ async def test_list_documents() -> None:
 
 
 @pytest.mark.asyncio
-async def test_process_document_success() -> None:
+async def test_retry_failed_document() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        doc = await _upload_pdf(client)
-
-        with (
-            patch(
-                "app.routers.documents.extract_text",
-                return_value="Chunk one. Chunk two. Chunk three.",
-            ),
-            patch(
-                "app.routers.documents.chunk_text",
-                return_value=["Chunk one.", "Chunk two.", "Chunk three."],
-            ),
-        ):
-            response = await client.post(f"/api/documents/{doc['id']}/process")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "processed"
-    assert data["chunk_count"] == 3
-
-
-@pytest.mark.asyncio
-async def test_process_document_not_found() -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        response = await client.post("/api/documents/nonexistent/process")
-    assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_process_document_already_processed() -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        doc = await _upload_pdf(client)
-
-        with (
-            patch("app.routers.documents.extract_text", return_value="Some text"),
-            patch("app.routers.documents.chunk_text", return_value=["Some text"]),
-        ):
-            await client.post(f"/api/documents/{doc['id']}/process")
-            response = await client.post(f"/api/documents/{doc['id']}/process")
-
-    assert response.status_code == 400
-    assert "processed" in response.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_process_document_no_text() -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        doc = await _upload_pdf(client)
-
         with patch("app.routers.documents.extract_text", return_value="   "):
-            response = await client.post(f"/api/documents/{doc['id']}/process")
-
-    assert response.status_code == 400
-    assert "No text" in response.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_embed_document_success() -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        doc = await _upload_pdf(client)
+            response = await client.post(
+                "/api/documents/upload",
+                files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4 mock"), "application/pdf")},
+            )
+        doc_id = response.json()["id"]
 
         with (
             patch("app.routers.documents.extract_text", return_value="Some text."),
             patch("app.routers.documents.chunk_text", return_value=["Some text."]),
-            patch("app.routers.documents.embed_doc", return_value=1),
+            patch("app.routers.documents.embed_doc", new=AsyncMock(return_value=1)),
         ):
-            await client.post(f"/api/documents/{doc['id']}/process")
-            response = await client.post(f"/api/documents/{doc['id']}/embed")
+            retry_response = await client.post(f"/api/documents/{doc_id}/retry")
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "embedded"
-    assert data["chunk_count"] == 1
+        assert retry_response.status_code == 200
+        list_response = await client.get("/api/documents")
+
+    document = list_response.json()["documents"][0]
+    assert document["status"] == "embedded"
+    assert document["error"] is None
 
 
 @pytest.mark.asyncio
-async def test_embed_not_processed() -> None:
+async def test_retry_rejects_non_failed_document() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
-        response = await client.post(f"/api/documents/{doc['id']}/embed")
+        response = await client.post(f"/api/documents/{doc['id']}/retry")
 
     assert response.status_code == 400
-    assert "uploaded" in response.json()["detail"]
+    assert "failed" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_embed_document_not_found() -> None:
+async def test_retry_document_not_found() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        response = await client.post("/api/documents/nonexistent/embed")
+        response = await client.post("/api/documents/nonexistent/retry")
     assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_embed_no_api_key() -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        doc = await _upload_pdf(client)
-
-        with (
-            patch("app.routers.documents.extract_text", return_value="Some text."),
-            patch("app.routers.documents.chunk_text", return_value=["Some text."]),
-            patch(
-                "app.routers.documents.embed_doc",
-                side_effect=ValueError("Embedding model is not configured"),
-            ),
-        ):
-            await client.post(f"/api/documents/{doc['id']}/process")
-            response = await client.post(f"/api/documents/{doc['id']}/embed")
-
-    assert response.status_code == 400
-    assert "Embedding model" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -244,23 +225,12 @@ async def test_list_documents_isolated_per_client() -> None:
 
 
 @pytest.mark.asyncio
-async def test_process_document_not_owner_returns_404() -> None:
+async def test_retry_document_not_owner_returns_404() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
         doc = await _upload_pdf(client_a)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
-        response = await client_b.post(f"/api/documents/{doc['id']}/process")
-
-    assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_embed_document_not_owner_returns_404() -> None:
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
-        doc = await _upload_pdf(client_a)
-    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
-        response = await client_b.post(f"/api/documents/{doc['id']}/embed")
+        response = await client_b.post(f"/api/documents/{doc['id']}/retry")
 
     assert response.status_code == 404
 

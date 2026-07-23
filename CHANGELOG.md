@@ -6,6 +6,23 @@ This project follows semantic versioning.
 
 ---
 
+## [0.4.0] - Automatic Ingestion Pipeline
+
+### Changed
+
+- Upload now runs the full ingestion pipeline (extract, chunk, embed) automatically in a background task
+- Frontend polls document status and auto-opens chat when a document is ready
+- Document statuses surfaced as user-friendly labels (Queued, Processing, Embedding, Ready, Failed)
+
+### Added
+
+- `POST /api/documents/{id}/retry` for failed documents
+- `error` field on document responses
+
+### Removed
+
+- Manual `POST /api/documents/{id}/process` and `POST /api/documents/{id}/embed` endpoints and their UI buttons
+
 ## [0.3.0] - Conversation Management
 
 ### Added

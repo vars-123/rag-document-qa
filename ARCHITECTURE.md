@@ -98,8 +98,9 @@ rag-document-qa/
 
 | Method | Path                    | Description       | Request            | Response                          |
 |--------|-------------------------|-------------------|--------------------|-----------------------------------|
-| POST   | `/api/documents/upload` | Upload a PDF      | `multipart/form-data` (file) | `{ "id", "filename", "status" }` |
-| GET    | `/api/documents`        | List documents    | —                  | `[{ "id", "filename", "status", "uploaded_at" }]` |
+| POST   | `/api/documents/upload` | Upload a PDF and start the ingestion pipeline in the background | `multipart/form-data` (file) | `{ "id", "filename", "status" }` |
+| GET    | `/api/documents`        | List documents    | —                  | `[{ "id", "filename", "status", "uploaded_at", "error" }]` |
+| POST   | `/api/documents/{id}/retry` | Re-run the pipeline for a failed document | — | `{ "id", "status" }` |
 | DELETE | `/api/documents/{id}`   | Delete a document | —                  | `{ "status": "deleted" }`         |
 
 ### Chat
@@ -116,13 +117,19 @@ rag-document-qa/
 
 ### PDF Upload Pipeline
 
+The ingestion pipeline runs automatically in a background task after upload.
+The upload response returns immediately with status `uploaded`; the frontend
+polls `GET /api/documents` until the document reaches a terminal status
+(`embedded` or `failed`). Failures record an `error` message on the document
+and can be retried via `POST /api/documents/{id}/retry`.
+
 ```
-Upload PDF → Validate (.pdf, size) → Store file on disk
-  → PDF Service (extract text with pdfplumber)
-  → Chunking Service (split into overlapping chunks, ~500 tokens)
-  → Embedding Service (Gemini embeddings)
-  → Vector Service (store in ChromaDB collection)
-  → Return document ID + status
+Upload PDF → Validate (.pdf, size) → Store file on disk → 201 response
+  → [background] PDF Service (extract text with pdfplumber)      status: processing
+  → [background] Chunking Service (overlapping chunks, ~500 tokens)
+  → [background] Embedding Service (Gemini embeddings)           status: embedding
+  → [background] Vector Service (store in ChromaDB collection)   status: embedded
+  → on failure: status = failed, error message stored on the document
 ```
 
 ### Question Answering Pipeline

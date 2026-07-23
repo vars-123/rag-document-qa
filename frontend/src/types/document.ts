@@ -4,4 +4,5 @@ export interface DocumentResponse {
   status: string
   uploaded_at: string
   chunk_count: number
+  error: string | null
 }

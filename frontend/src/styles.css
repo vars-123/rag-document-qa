@@ -760,3 +760,33 @@ input:disabled {
     border-bottom: 1px solid var(--line);
   }
 }
+
+.status-badge.is-busy {
+  animation: badge-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.document-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(180, 35, 24, 0.08);
+  color: var(--danger);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.document-progress-note {
+  color: var(--muted);
+  font-size: 0.84rem;
+  align-self: center;
+}

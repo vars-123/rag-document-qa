@@ -3,7 +3,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 
 from app.dependencies import get_client_id
 from app.models.document import DocumentListResponse, DocumentResponse
@@ -38,6 +38,7 @@ class _DocumentRecord:
     file_path: str
     owner_id: str
     chunk_count: int = 0
+    error: str | None = None
 
 
 _documents: dict[str, _DocumentRecord] = {}
@@ -50,6 +51,7 @@ def _to_response(rec: _DocumentRecord) -> DocumentResponse:
         status=rec.status,
         uploaded_at=rec.uploaded_at,
         chunk_count=rec.chunk_count,
+        error=rec.error,
     )
 
 
@@ -60,9 +62,35 @@ def get_owned_document(doc_id: str, owner_id: str) -> _DocumentRecord:
     return rec
 
 
+async def run_pipeline(doc_id: str) -> None:
+    rec = _documents.get(doc_id)
+    if rec is None or not os.path.exists(rec.file_path):
+        return
+
+    try:
+        rec.status = "processing"
+        text = extract_text(rec.file_path)
+        if not text.strip():
+            raise ValueError(NO_TEXT_ERROR)
+        chunks = chunk_text(text)
+        rec.chunk_count = len(chunks)
+
+        rec.status = "embedding"
+        await embed_doc(doc_id, chunks)
+
+        rec.status = "embedded"
+        rec.error = None
+    except Exception as exc:
+        if _documents.get(doc_id) is rec:
+            rec.status = "failed"
+            rec.error = str(exc)
+
+
 @router.post("/upload", status_code=201)
 async def upload_document(
-    file: UploadFile, owner_id: str = Depends(get_client_id)
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    owner_id: str = Depends(get_client_id),
 ) -> DocumentResponse:
     if file.content_type != ALLOWED_CONTENT_TYPE:
         raise HTTPException(
@@ -93,6 +121,7 @@ async def upload_document(
         owner_id=owner_id,
     )
     _documents[doc_id] = rec
+    background_tasks.add_task(run_pipeline, doc_id)
     return _to_response(rec)
 
 
@@ -109,73 +138,25 @@ async def list_documents(
     )
 
 
-@router.post("/{doc_id}/process")
-async def process_document(
-    doc_id: str, owner_id: str = Depends(get_client_id)
+@router.post("/{doc_id}/retry")
+async def retry_document(
+    doc_id: str,
+    background_tasks: BackgroundTasks,
+    owner_id: str = Depends(get_client_id),
 ) -> DocumentResponse:
     rec = get_owned_document(doc_id, owner_id)
 
-    if rec.status != "uploaded":
+    if rec.status != "failed":
         raise HTTPException(
             status_code=400,
-            detail=f"Document status is '{rec.status}', expected 'uploaded'",
+            detail=f"Document status is '{rec.status}', expected 'failed'",
         )
-
     if not os.path.exists(rec.file_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
 
-    rec.status = "processing"
-    try:
-        text = extract_text(rec.file_path)
-        if not text.strip():
-            rec.status = "failed"
-            raise HTTPException(status_code=400, detail=NO_TEXT_ERROR)
-        chunks = chunk_text(text)
-        rec.chunk_count = len(chunks)
-        rec.status = "processed"
-    except HTTPException:
-        raise
-    except Exception as exc:
-        rec.status = "failed"
-        raise HTTPException(
-            status_code=500, detail=f"Processing failed: {exc}"
-        ) from exc
-
-    return _to_response(rec)
-
-
-@router.post("/{doc_id}/embed")
-async def embed_document(
-    doc_id: str, owner_id: str = Depends(get_client_id)
-) -> DocumentResponse:
-    rec = get_owned_document(doc_id, owner_id)
-
-    if rec.status != "processed":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Document status is '{rec.status}', expected 'processed'",
-        )
-
-    if not os.path.exists(rec.file_path):
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
-    rec.status = "embedding"
-    try:
-        text = extract_text(rec.file_path)
-        if not text.strip():
-            rec.status = "failed"
-            raise HTTPException(status_code=400, detail=NO_TEXT_ERROR)
-        chunks = chunk_text(text)
-        await embed_doc(doc_id, chunks)
-        rec.chunk_count = len(chunks)
-        rec.status = "embedded"
-    except ValueError as exc:
-        rec.status = "failed"
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        rec.status = "failed"
-        raise HTTPException(status_code=500, detail=f"Embedding failed: {exc}") from exc
-
+    rec.status = "uploaded"
+    rec.error = None
+    background_tasks.add_task(run_pipeline, doc_id)
     return _to_response(rec)
 
 

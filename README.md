@@ -19,7 +19,7 @@ Current Phase:
 Completed milestones:
 
 - PDF upload
-- PDF processing
+- Automatic ingestion pipeline (background processing and embedding)
 - Embedding generation
 - Question answering
 - Streaming responses

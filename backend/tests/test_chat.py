@@ -1,5 +1,5 @@
 import io
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient, ASGITransport
@@ -19,22 +19,17 @@ def clear_store() -> None:
 
 
 async def _upload_and_embed(client: AsyncClient) -> dict:
-    response = await client.post(
-        "/api/documents/upload",
-        files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4 mock"), "application/pdf")},
-    )
-    assert response.status_code == 201
-    doc = response.json()
-
     with (
         patch("app.routers.documents.extract_text", return_value="Some context."),
         patch("app.routers.documents.chunk_text", return_value=["Some context."]),
-        patch("app.routers.documents.embed_doc", return_value=1),
+        patch("app.routers.documents.embed_doc", new=AsyncMock(return_value=1)),
     ):
-        await client.post(f"/api/documents/{doc['id']}/process")
-        resp = await client.post(f"/api/documents/{doc['id']}/embed")
-    assert resp.status_code == 200
-    return resp.json()
+        response = await client.post(
+            "/api/documents/upload",
+            files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4 mock"), "application/pdf")},
+        )
+    assert response.status_code == 201
+    return response.json()
 
 
 @pytest.mark.asyncio
@@ -90,10 +85,13 @@ async def test_chat_document_not_found() -> None:
 async def test_chat_not_embedded() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
-        response = await client.post(
-            "/api/documents/upload",
-            files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")},
-        )
+        with patch(
+            "app.routers.documents.run_pipeline", new=AsyncMock(return_value=None)
+        ):
+            response = await client.post(
+                "/api/documents/upload",
+                files={"file": ("test.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")},
+            )
         doc = response.json()
         response = await client.post(
             "/api/chat",

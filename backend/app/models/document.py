@@ -9,6 +9,7 @@ class DocumentResponse(BaseModel):
     status: str
     uploaded_at: datetime
     chunk_count: int = 0
+    error: str | None = None
 
 
 class DocumentListResponse(BaseModel):

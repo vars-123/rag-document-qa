@@ -43,14 +43,8 @@ export async function uploadDocument(file: File): Promise<DocumentResponse> {
   return res.json()
 }
 
-export async function processDocument(id: string): Promise<DocumentResponse> {
-  const res = await fetch(`${BASE}/documents/${id}/process`, { method: 'POST', headers: clientHeaders() })
-  if (!res.ok) throw new Error(await parseError(res))
-  return res.json()
-}
-
-export async function embedDocument(id: string): Promise<DocumentResponse> {
-  const res = await fetch(`${BASE}/documents/${id}/embed`, { method: 'POST', headers: clientHeaders() })
+export async function retryDocument(id: string): Promise<DocumentResponse> {
+  const res = await fetch(`${BASE}/documents/${id}/retry`, { method: 'POST', headers: clientHeaders() })
   if (!res.ok) throw new Error(await parseError(res))
   return res.json()
 }

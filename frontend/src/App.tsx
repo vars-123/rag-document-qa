@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChatInterface } from './components/ChatInterface'
 import { DocumentList } from './components/DocumentList'
 import { UploadZone } from './components/UploadZone'
@@ -7,13 +7,29 @@ import { API_BASE_URL } from './services/api'
 
 function App() {
   const [backendStatus, setBackendStatus] = useState('checking...')
-  const { documents, loading, error, clearError, activeOps, upload, process, embed, delete: deleteDoc } = useDocuments()
+  const { documents, loading, error, clearError, activeOps, upload, retry, delete: deleteDoc } = useDocuments()
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
+  const embeddedIdsRef = useRef<Set<string> | null>(null)
 
   const selectedDoc = useMemo(
     () => documents.find((d) => d.id === selectedDocId) ?? null,
     [documents, selectedDocId],
   )
+
+  useEffect(() => {
+    const embeddedIds = new Set(
+      documents.filter((d) => d.status === 'embedded').map((d) => d.id),
+    )
+    const previous = embeddedIdsRef.current
+    embeddedIdsRef.current = embeddedIds
+    if (previous === null) return
+    const newlyReady = documents.find(
+      (d) => d.status === 'embedded' && !previous.has(d.id),
+    )
+    if (newlyReady) {
+      setSelectedDocId(newlyReady.id)
+    }
+  }, [documents])
 
   const handleSelect = useCallback((id: string) => {
     setSelectedDocId((prev) => (prev === id ? null : id))
@@ -82,8 +98,7 @@ function App() {
                 <DocumentList
                   documents={documents}
                   onDelete={deleteDoc}
-                  onProcess={process}
-                  onEmbed={embed}
+                  onRetry={retry}
                   onSelect={handleSelect}
                   selectedId={selectedDocId}
                   activeOps={activeOps}

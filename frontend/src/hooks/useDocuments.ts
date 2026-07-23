@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DocumentResponse } from '../types/document'
-import { fetchDocuments, uploadDocument, processDocument, embedDocument, deleteDocument } from '../services/api'
+import { fetchDocuments, uploadDocument, retryDocument, deleteDocument } from '../services/api'
+
+const POLL_INTERVAL_MS = 2000
+const NON_TERMINAL_STATUSES = new Set(['uploaded', 'processing', 'processed', 'embedding'])
 
 export function useDocuments() {
   const [documents, setDocuments] = useState<DocumentResponse[]>([])
@@ -21,17 +24,28 @@ export function useDocuments() {
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true)
     try {
       const docs = await fetchDocuments()
       setDocuments(docs)
+      return docs
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load documents'
       setErrorAutoClear(msg)
+      return []
     } finally {
       setLoading(false)
     }
   }, [setErrorAutoClear])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  useEffect(() => {
+    if (!documents.some((doc) => NON_TERMINAL_STATUSES.has(doc.status))) return
+    const timer = setTimeout(load, POLL_INTERVAL_MS)
+    return () => clearTimeout(timer)
+  }, [documents, load])
 
   const runOp = useCallback(
     async (id: string, op: () => Promise<unknown>, opName: string) => {
@@ -55,10 +69,6 @@ export function useDocuments() {
     [load, setErrorAutoClear],
   )
 
-  useEffect(() => {
-    load()
-  }, [load])
-
   const upload = useCallback(
     async (file: File) => {
       try {
@@ -72,13 +82,8 @@ export function useDocuments() {
     [load, setErrorAutoClear],
   )
 
-  const process = useCallback(
-    (id: string) => runOp(id, () => processDocument(id), 'Process'),
-    [runOp],
-  )
-
-  const embed = useCallback(
-    (id: string) => runOp(id, () => embedDocument(id), 'Embed'),
+  const retry = useCallback(
+    (id: string) => runOp(id, () => retryDocument(id), 'Retry'),
     [runOp],
   )
 
@@ -87,5 +92,5 @@ export function useDocuments() {
     [runOp],
   )
 
-  return { documents, loading, error, clearError, activeOps, upload, process, embed, delete: delete_ }
+  return { documents, loading, error, clearError, activeOps, upload, retry, delete: delete_ }
 }
