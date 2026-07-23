@@ -108,6 +108,7 @@ rag-document-qa/
 |--------|------------------|--------------------------------------|-----------------------------|----------------------------------------------|
 | POST   | `/api/chat`      | Ask a question (streaming)           | `{ "document_id", "question", "session_id"? }` | `text/event-stream` (SSE) |
 | GET    | `/api/chat/history` | Get chat history for a session    | `?session_id=...`           | `[{ "role", "content", "timestamp" }]`      |
+| GET    | `/api/chat/conversations` | List conversations for a document | `?document_id=...`          | `[{ "session_id", "title", "created_at", "updated_at", "message_count" }]` |
 
 ---
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChatMessage } from '../types/chat'
 import { fetchChatHistory, sendChatMessage } from '../services/api'
 
@@ -16,9 +16,38 @@ export function useChat(documentId: string | null) {
   const [error, setError] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const activationRef = useRef(0)
+
+  const activateSession = useCallback((docId: string, nextSessionId: string) => {
+    globalThis.localStorage.setItem(getSessionStorageKey(docId), nextSessionId)
+
+    const activation = ++activationRef.current
+    setLoadingHistory(true)
+    setError(null)
+    setSessionId(nextSessionId)
+    setMessages([])
+
+    fetchChatHistory(nextSessionId)
+      .then((history) => {
+        if (activationRef.current === activation) {
+          setMessages(history)
+        }
+      })
+      .catch((err) => {
+        if (activationRef.current !== activation) return
+        const msg = err instanceof Error ? err.message : 'Failed to load chat history'
+        setError(msg)
+      })
+      .finally(() => {
+        if (activationRef.current === activation) {
+          setLoadingHistory(false)
+        }
+      })
+  }, [])
 
   useEffect(() => {
     if (!documentId) {
+      activationRef.current += 1
       setMessages([])
       setError(null)
       setSessionId(null)
@@ -26,37 +55,10 @@ export function useChat(documentId: string | null) {
       return
     }
 
-    const storageKey = getSessionStorageKey(documentId)
-    const storedSessionId = globalThis.localStorage.getItem(storageKey) ?? createSessionId()
-    globalThis.localStorage.setItem(storageKey, storedSessionId)
-
-    let active = true
-    setLoadingHistory(true)
-    setError(null)
-    setSessionId(storedSessionId)
-    setMessages([])
-
-    fetchChatHistory(storedSessionId)
-      .then((history) => {
-        if (active) {
-          setMessages(history)
-        }
-      })
-      .catch((err) => {
-        if (!active) return
-        const msg = err instanceof Error ? err.message : 'Failed to load chat history'
-        setError(msg)
-      })
-      .finally(() => {
-        if (active) {
-          setLoadingHistory(false)
-        }
-      })
-
-    return () => {
-      active = false
-    }
-  }, [documentId])
+    const storedSessionId =
+      globalThis.localStorage.getItem(getSessionStorageKey(documentId)) ?? createSessionId()
+    activateSession(documentId, storedSessionId)
+  }, [documentId, activateSession])
 
   const send = useCallback(
     async (question: string) => {
@@ -120,19 +122,22 @@ export function useChat(documentId: string | null) {
     [documentId, sessionId],
   )
 
-  const clear = useCallback(() => {
+  const startNew = useCallback(() => {
     if (!documentId) {
       setMessages([])
       setError(null)
       return
     }
+    activateSession(documentId, createSessionId())
+  }, [documentId, activateSession])
 
-    const nextSessionId = createSessionId()
-    globalThis.localStorage.setItem(getSessionStorageKey(documentId), nextSessionId)
-    setSessionId(nextSessionId)
-    setMessages([])
-    setError(null)
-  }, [documentId])
+  const switchSession = useCallback(
+    (nextSessionId: string) => {
+      if (!documentId || nextSessionId === sessionId) return
+      activateSession(documentId, nextSessionId)
+    },
+    [documentId, sessionId, activateSession],
+  )
 
-  return { messages, streaming, error, send, clear, loadingHistory }
+  return { messages, streaming, error, send, startNew, switchSession, sessionId, loadingHistory }
 }

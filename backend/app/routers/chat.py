@@ -5,9 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.dependencies import get_client_id
-from app.models.chat import ChatHistoryResponse, ChatRequest
+from app.models.chat import ChatHistoryResponse, ChatRequest, ConversationListResponse
 from app.routers.documents import get_owned_document
-from app.services.chat_history_service import add_message, ensure_session, get_messages
+from app.services.chat_history_service import (
+    add_message,
+    ensure_session,
+    get_messages,
+    list_sessions,
+)
 from app.services.chat_service import generate_stream, retrieve_context
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -32,7 +37,7 @@ async def chat(body: ChatRequest, owner_id: str = Depends(get_client_id)):
 
     session_id = body.session_id or str(uuid.uuid4())
     try:
-        ensure_session(session_id, body.document_id, owner_id)
+        ensure_session(session_id, body.document_id, owner_id, title=body.question[:80])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -59,6 +64,17 @@ async def chat(body: ChatRequest, owner_id: str = Depends(get_client_id)):
         stream_answer(),
         media_type="text/event-stream",
         headers={"X-Chat-Session-Id": session_id},
+    )
+
+
+@router.get("/conversations")
+async def list_conversations(
+    document_id: str = Query(..., min_length=1),
+    owner_id: str = Depends(get_client_id),
+) -> ConversationListResponse:
+    get_owned_document(document_id, owner_id)
+    return ConversationListResponse(
+        conversations=list_sessions(document_id, owner_id)
     )
 
 

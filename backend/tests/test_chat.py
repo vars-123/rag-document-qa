@@ -198,3 +198,73 @@ def test_extract_text_handles_content_blocks() -> None:
     )
     assert _extract_text([{"type": "text", "text": "a"}, "b"]) == "ab"
     assert _extract_text(None) == ""
+
+
+async def _chat(client: AsyncClient, doc_id: str, question: str, session_id: str) -> None:
+    with (
+        patch("app.routers.chat.retrieve_context", return_value=["Some context."]),
+        patch("app.routers.chat.generate_stream", return_value=iter(["Hi"])),
+    ):
+        response = await client.post(
+            "/api/chat",
+            json={
+                "document_id": doc_id,
+                "question": question,
+                "session_id": session_id,
+            },
+        )
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_empty() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
+        doc = await _upload_and_embed(client)
+        response = await client.get(f"/api/chat/conversations?document_id={doc['id']}")
+    assert response.status_code == 200
+    assert response.json()["conversations"] == []
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_returns_titles_and_counts() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
+        doc = await _upload_and_embed(client)
+        await _chat(client, doc["id"], "What is the capital of France?", "conv-1")
+        await _chat(client, doc["id"], "Second question", "conv-1")
+        await _chat(client, doc["id"], "Another topic entirely", "conv-2")
+
+        response = await client.get(f"/api/chat/conversations?document_id={doc['id']}")
+
+    assert response.status_code == 200
+    conversations = response.json()["conversations"]
+    assert len(conversations) == 2
+    by_id = {c["session_id"]: c for c in conversations}
+    assert by_id["conv-1"]["title"] == "What is the capital of France?"
+    assert by_id["conv-1"]["message_count"] == 4
+    assert by_id["conv-2"]["title"] == "Another topic entirely"
+    assert by_id["conv-2"]["message_count"] == 2
+    for conv in conversations:
+        assert conv["created_at"]
+        assert conv["updated_at"]
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_isolated_per_client() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
+        doc = await _upload_and_embed(client_a)
+        await _chat(client_a, doc["id"], "Private question", "conv-a")
+
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
+        response = await client_b.get(f"/api/chat/conversations?document_id={doc['id']}")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_document_not_found() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
+        response = await client.get("/api/chat/conversations?document_id=nonexistent")
+    assert response.status_code == 404

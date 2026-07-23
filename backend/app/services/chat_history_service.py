@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from app.config import settings
-from app.models.chat import ChatMessage
+from app.models.chat import ChatMessage, ConversationSummary
 
 
 def _resolve_sqlite_path(database_url: str) -> str:
@@ -73,9 +73,21 @@ def initialize_chat_history() -> None:
             connection.execute(
                 "ALTER TABLE chat_sessions ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''"
             )
+        if "title" not in columns:
+            connection.execute(
+                "ALTER TABLE chat_sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''"
+            )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_chat_sessions_owner_document
+            ON chat_sessions (owner_id, document_id, updated_at DESC)
+            """
+        )
 
 
-def ensure_session(session_id: str, document_id: str, owner_id: str) -> None:
+def ensure_session(
+    session_id: str, document_id: str, owner_id: str, title: str = ""
+) -> None:
     initialize_chat_history()
     now = datetime.now(timezone.utc).isoformat()
     with _db() as connection:
@@ -86,10 +98,10 @@ def ensure_session(session_id: str, document_id: str, owner_id: str) -> None:
         if row is None:
             connection.execute(
                 """
-                INSERT INTO chat_sessions (session_id, document_id, owner_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO chat_sessions (session_id, document_id, owner_id, title, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (session_id, document_id, owner_id, now, now),
+                (session_id, document_id, owner_id, title, now, now),
             )
             return
 
@@ -151,6 +163,38 @@ def clear_chat_history() -> None:
     with _db() as connection:
         connection.execute("DELETE FROM chat_messages")
         connection.execute("DELETE FROM chat_sessions")
+
+
+def list_sessions(document_id: str, owner_id: str) -> list[ConversationSummary]:
+    initialize_chat_history()
+    with _db() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                s.session_id,
+                s.title,
+                s.created_at,
+                s.updated_at,
+                COUNT(m.id) AS message_count
+            FROM chat_sessions s
+            LEFT JOIN chat_messages m ON m.session_id = s.session_id
+            WHERE s.document_id = ? AND s.owner_id = ?
+            GROUP BY s.session_id
+            ORDER BY s.updated_at DESC
+            """,
+            (document_id, owner_id),
+        ).fetchall()
+
+    return [
+        ConversationSummary(
+            session_id=row["session_id"],
+            title=row["title"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            message_count=row["message_count"],
+        )
+        for row in rows
+    ]
 
 
 def delete_document_history(document_id: str) -> None:

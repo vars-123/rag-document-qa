@@ -24,6 +24,8 @@ Completed milestones:
 - Question answering
 - Streaming responses
 - Chat history and session handling
+- Per-user data isolation (client identity)
+- Conversation management (sidebar, multiple conversations per document)
 - Responsive UI refresh
 - Deployment readiness
 

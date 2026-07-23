@@ -16,3 +16,15 @@ class ChatMessage(BaseModel):
 class ChatHistoryResponse(BaseModel):
     session_id: str
     messages: list[ChatMessage]
+
+
+class ConversationSummary(BaseModel):
+    session_id: str
+    title: str
+    created_at: str
+    updated_at: str
+    message_count: int
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationSummary]

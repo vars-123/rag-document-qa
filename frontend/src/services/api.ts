@@ -1,5 +1,5 @@
 import type { DocumentResponse } from '../types/document'
-import type { ChatRequest, ChatMessage } from '../types/chat'
+import type { ChatRequest, ChatMessage, ConversationSummary } from '../types/chat'
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/$/, '')
 const BASE = API_BASE_URL
@@ -88,4 +88,13 @@ export async function fetchChatHistory(
   if (!res.ok) throw new Error('Failed to fetch history')
   const data = await res.json()
   return data.messages
+}
+
+export async function fetchConversations(
+  documentId: string,
+): Promise<ConversationSummary[]> {
+  const res = await fetch(`${BASE}/chat/conversations?document_id=${documentId}`, { headers: clientHeaders() })
+  if (!res.ok) throw new Error(await parseError(res))
+  const data = await res.json()
+  return data.conversations
 }

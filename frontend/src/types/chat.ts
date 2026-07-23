@@ -9,3 +9,11 @@ export interface ChatMessage {
   content: string
   timestamp: string
 }
+
+export interface ConversationSummary {
+  session_id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count: number
+}

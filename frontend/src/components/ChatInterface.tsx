@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '../hooks/useChat'
+import { useConversations } from '../hooks/useConversations'
+import { ConversationSidebar } from './ConversationSidebar'
 import type { ChatMessage } from '../types/chat'
 
 interface ChatInterfaceProps {
@@ -24,37 +26,51 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
 }
 
 export function ChatInterface({ documentId, documentName }: ChatInterfaceProps) {
-  const { messages, streaming, error, send, clear, loadingHistory } = useChat(documentId)
+  const { messages, streaming, error, send, startNew, switchSession, sessionId, loadingHistory } = useChat(documentId)
+  const { conversations, loading: loadingConversations, refresh: refreshConversations } = useConversations(documentId)
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     inputRef.current?.focus()
-  }, [documentId])
+  }, [documentId, sessionId])
 
   const canSend = useMemo(() => {
     return draft.trim().length > 0 && !streaming && !loadingHistory
   }, [draft, loadingHistory, streaming])
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
+  const submit = async () => {
     if (!canSend) return
-    send(draft.trim())
+    const question = draft.trim()
     setDraft('')
+    await send(question)
+    refreshConversations()
     inputRef.current?.focus()
   }
 
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    submit()
+  }
+
   return (
-    <div className="chat-shell">
-      <div className="chat-header">
-        <div>
-          <h2 className="chat-title">{documentName}</h2>
-          <p className="chat-description">Ask grounded questions from the selected PDF.</p>
+    <div className="chat-layout">
+      <ConversationSidebar
+        conversations={conversations}
+        loading={loadingConversations}
+        activeSessionId={sessionId}
+        onSelect={switchSession}
+      />
+      <div className="chat-shell">
+        <div className="chat-header">
+          <div>
+            <h2 className="chat-title">{documentName}</h2>
+            <p className="chat-description">Ask grounded questions from the selected PDF.</p>
+          </div>
+          <button className="secondary-button" onClick={startNew} disabled={messages.length === 0 && !loadingHistory}>
+            New chat
+          </button>
         </div>
-        <button className="secondary-button" onClick={clear} disabled={messages.length === 0 && !loadingHistory}>
-          Clear
-        </button>
-      </div>
 
       <div className="chat-thread" role="log" aria-live="polite">
         {loadingHistory && (
@@ -89,10 +105,7 @@ export function ChatInterface({ documentId, documentName }: ChatInterfaceProps) 
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault()
-                if (canSend) {
-                  send(draft.trim())
-                  setDraft('')
-                }
+                submit()
               }
             }}
           />
@@ -105,6 +118,7 @@ export function ChatInterface({ documentId, documentName }: ChatInterfaceProps) 
           <span>{streaming ? 'Generating answer...' : 'Responses stream in real time.'}</span>
         </div>
       </form>
+      </div>
     </div>
   )
 }
