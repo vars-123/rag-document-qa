@@ -3,8 +3,9 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 
+from app.dependencies import get_client_id
 from app.models.document import DocumentListResponse, DocumentResponse
 from app.services.chunking_service import chunk_text
 from app.services.embedding_service import embed_document as embed_doc
@@ -35,6 +36,7 @@ class _DocumentRecord:
     status: str
     uploaded_at: datetime
     file_path: str
+    owner_id: str
     chunk_count: int = 0
 
 
@@ -51,8 +53,17 @@ def _to_response(rec: _DocumentRecord) -> DocumentResponse:
     )
 
 
+def get_owned_document(doc_id: str, owner_id: str) -> _DocumentRecord:
+    rec = _documents.get(doc_id)
+    if rec is None or rec.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return rec
+
+
 @router.post("/upload", status_code=201)
-async def upload_document(file: UploadFile) -> DocumentResponse:
+async def upload_document(
+    file: UploadFile, owner_id: str = Depends(get_client_id)
+) -> DocumentResponse:
     if file.content_type != ALLOWED_CONTENT_TYPE:
         raise HTTPException(
             status_code=400,
@@ -79,23 +90,30 @@ async def upload_document(file: UploadFile) -> DocumentResponse:
         status="uploaded",
         uploaded_at=now,
         file_path=file_path,
+        owner_id=owner_id,
     )
     _documents[doc_id] = rec
     return _to_response(rec)
 
 
 @router.get("")
-async def list_documents() -> DocumentListResponse:
+async def list_documents(
+    owner_id: str = Depends(get_client_id),
+) -> DocumentListResponse:
     return DocumentListResponse(
-        documents=[_to_response(rec) for rec in _documents.values()]
+        documents=[
+            _to_response(rec)
+            for rec in _documents.values()
+            if rec.owner_id == owner_id
+        ]
     )
 
 
 @router.post("/{doc_id}/process")
-async def process_document(doc_id: str) -> DocumentResponse:
-    rec = _documents.get(doc_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Document not found")
+async def process_document(
+    doc_id: str, owner_id: str = Depends(get_client_id)
+) -> DocumentResponse:
+    rec = get_owned_document(doc_id, owner_id)
 
     if rec.status != "uploaded":
         raise HTTPException(
@@ -127,10 +145,10 @@ async def process_document(doc_id: str) -> DocumentResponse:
 
 
 @router.post("/{doc_id}/embed")
-async def embed_document(doc_id: str) -> DocumentResponse:
-    rec = _documents.get(doc_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Document not found")
+async def embed_document(
+    doc_id: str, owner_id: str = Depends(get_client_id)
+) -> DocumentResponse:
+    rec = get_owned_document(doc_id, owner_id)
 
     if rec.status != "processed":
         raise HTTPException(
@@ -162,10 +180,11 @@ async def embed_document(doc_id: str) -> DocumentResponse:
 
 
 @router.delete("/{doc_id}")
-async def delete_document(doc_id: str) -> dict[str, str]:
-    rec = _documents.pop(doc_id, None)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Document not found")
+async def delete_document(
+    doc_id: str, owner_id: str = Depends(get_client_id)
+) -> dict[str, str]:
+    rec = get_owned_document(doc_id, owner_id)
+    _documents.pop(doc_id)
 
     try:
         delete_collection(doc_id)

@@ -13,6 +13,20 @@ SYSTEM_PROMPT = (
 _llm: ChatGoogleGenerativeAI | None = None
 
 
+def _extract_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        return "".join(parts)
+    return ""
+
+
 def _get_llm() -> ChatGoogleGenerativeAI:
     global _llm
     if _llm is None:
@@ -40,6 +54,6 @@ async def generate_stream(question: str, context_chunks: list[str]):
     ]
 
     async for chunk in _get_llm().astream(messages):
-        content = chunk.content
-        if isinstance(content, str) and content:
-            yield content
+        text = _extract_text(chunk.content)
+        if text:
+            yield text

@@ -1,11 +1,12 @@
 import inspect
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from app.dependencies import get_client_id
 from app.models.chat import ChatHistoryResponse, ChatRequest
-from app.routers.documents import _documents
+from app.routers.documents import get_owned_document
 from app.services.chat_history_service import add_message, ensure_session, get_messages
 from app.services.chat_service import generate_stream, retrieve_context
 
@@ -13,10 +14,8 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("")
-async def chat(body: ChatRequest):
-    rec = _documents.get(body.document_id)
-    if not rec:
-        raise HTTPException(status_code=404, detail="Document not found")
+async def chat(body: ChatRequest, owner_id: str = Depends(get_client_id)):
+    rec = get_owned_document(body.document_id, owner_id)
     if rec.status != "embedded":
         raise HTTPException(
             status_code=400,
@@ -33,7 +32,7 @@ async def chat(body: ChatRequest):
 
     session_id = body.session_id or str(uuid.uuid4())
     try:
-        ensure_session(session_id, body.document_id)
+        ensure_session(session_id, body.document_id, owner_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -64,6 +63,9 @@ async def chat(body: ChatRequest):
 
 
 @router.get("/history")
-async def chat_history(session_id: str = Query(..., min_length=1)) -> ChatHistoryResponse:
-    messages = get_messages(session_id)
+async def chat_history(
+    session_id: str = Query(..., min_length=1),
+    owner_id: str = Depends(get_client_id),
+) -> ChatHistoryResponse:
+    messages = get_messages(session_id, owner_id)
     return ChatHistoryResponse(session_id=session_id, messages=messages)

@@ -65,26 +65,36 @@ def initialize_chat_history() -> None:
             )
             """
         )
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(chat_sessions)").fetchall()
+        }
+        if "owner_id" not in columns:
+            connection.execute(
+                "ALTER TABLE chat_sessions ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''"
+            )
 
 
-def ensure_session(session_id: str, document_id: str) -> None:
+def ensure_session(session_id: str, document_id: str, owner_id: str) -> None:
     initialize_chat_history()
     now = datetime.now(timezone.utc).isoformat()
     with _db() as connection:
         row = connection.execute(
-            "SELECT document_id FROM chat_sessions WHERE session_id = ?",
+            "SELECT document_id, owner_id FROM chat_sessions WHERE session_id = ?",
             (session_id,),
         ).fetchone()
         if row is None:
             connection.execute(
                 """
-                INSERT INTO chat_sessions (session_id, document_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO chat_sessions (session_id, document_id, owner_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (session_id, document_id, now, now),
+                (session_id, document_id, owner_id, now, now),
             )
             return
 
+        if row["owner_id"] != owner_id:
+            raise ValueError("Session belongs to a different client")
         if row["document_id"] != document_id:
             raise ValueError("Session belongs to a different document")
 
@@ -111,9 +121,15 @@ def add_message(session_id: str, role: str, content: str) -> None:
         )
 
 
-def get_messages(session_id: str) -> list[ChatMessage]:
+def get_messages(session_id: str, owner_id: str) -> list[ChatMessage]:
     initialize_chat_history()
     with _db() as connection:
+        session = connection.execute(
+            "SELECT owner_id FROM chat_sessions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if session is None or session["owner_id"] != owner_id:
+            return []
         rows = connection.execute(
             """
             SELECT role, content, timestamp

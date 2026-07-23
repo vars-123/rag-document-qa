@@ -77,10 +77,12 @@ export function useChat(documentId: string | null) {
       }
       setMessages((prev) => [...prev, userMsg, assistantMsg])
 
+      let receivedAny = false
       try {
         await sendChatMessage(
           { document_id: documentId, question, session_id: sessionId },
           (chunk) => {
+            if (chunk) receivedAny = true
             setMessages((prev) => {
               const next = [...prev]
               const last = next[next.length - 1]
@@ -91,6 +93,15 @@ export function useChat(documentId: string | null) {
             })
           },
         )
+        if (!receivedAny) {
+          setError('The assistant returned an empty response. Please try again.')
+          setMessages((prev) => {
+            const last = prev[prev.length - 1]
+            return last?.role === 'assistant' && last.content === ''
+              ? prev.slice(0, -1)
+              : prev
+          })
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Chat failed'
         setError(msg)

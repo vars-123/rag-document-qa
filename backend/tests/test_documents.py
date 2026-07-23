@@ -8,6 +8,9 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.routers.documents import UPLOAD_DIR, _documents
 
+CLIENT_A = {"X-Client-Id": "test-client-aaaa"}
+CLIENT_B = {"X-Client-Id": "test-client-bbbb"}
+
 
 @pytest.fixture(autouse=True)
 def clear_store() -> None:
@@ -30,7 +33,7 @@ async def _upload_pdf(
 @pytest.mark.asyncio
 async def test_upload_pdf() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         data = await _upload_pdf(client)
     assert data["filename"] == "test.pdf"
     assert data["status"] == "uploaded"
@@ -41,7 +44,7 @@ async def test_upload_pdf() -> None:
 @pytest.mark.asyncio
 async def test_upload_rejects_non_pdf() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         response = await client.post(
             "/api/documents/upload",
             files={"file": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
@@ -53,7 +56,7 @@ async def test_upload_rejects_non_pdf() -> None:
 @pytest.mark.asyncio
 async def test_upload_rejects_large_file() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         large = b"x" * (10 * 1024 * 1024 + 1)
         response = await client.post(
             "/api/documents/upload",
@@ -66,7 +69,7 @@ async def test_upload_rejects_large_file() -> None:
 @pytest.mark.asyncio
 async def test_list_documents() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         await _upload_pdf(client, filename="a.pdf")
         await _upload_pdf(client, filename="b.pdf")
         response = await client.get("/api/documents")
@@ -78,7 +81,7 @@ async def test_list_documents() -> None:
 @pytest.mark.asyncio
 async def test_process_document_success() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
 
         with (
@@ -102,7 +105,7 @@ async def test_process_document_success() -> None:
 @pytest.mark.asyncio
 async def test_process_document_not_found() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         response = await client.post("/api/documents/nonexistent/process")
     assert response.status_code == 404
 
@@ -110,7 +113,7 @@ async def test_process_document_not_found() -> None:
 @pytest.mark.asyncio
 async def test_process_document_already_processed() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
 
         with (
@@ -127,7 +130,7 @@ async def test_process_document_already_processed() -> None:
 @pytest.mark.asyncio
 async def test_process_document_no_text() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
 
         with patch("app.routers.documents.extract_text", return_value="   "):
@@ -140,7 +143,7 @@ async def test_process_document_no_text() -> None:
 @pytest.mark.asyncio
 async def test_embed_document_success() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
 
         with (
@@ -160,7 +163,7 @@ async def test_embed_document_success() -> None:
 @pytest.mark.asyncio
 async def test_embed_not_processed() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
         response = await client.post(f"/api/documents/{doc['id']}/embed")
 
@@ -171,7 +174,7 @@ async def test_embed_not_processed() -> None:
 @pytest.mark.asyncio
 async def test_embed_document_not_found() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         response = await client.post("/api/documents/nonexistent/embed")
     assert response.status_code == 404
 
@@ -179,7 +182,7 @@ async def test_embed_document_not_found() -> None:
 @pytest.mark.asyncio
 async def test_embed_no_api_key() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
 
         with (
@@ -200,7 +203,7 @@ async def test_embed_no_api_key() -> None:
 @pytest.mark.asyncio
 async def test_delete_document_success() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         doc = await _upload_pdf(client)
         file_path = os.path.join(UPLOAD_DIR, f"{doc['id']}.pdf")
 
@@ -222,7 +225,62 @@ async def test_delete_document_success() -> None:
 @pytest.mark.asyncio
 async def test_delete_document_not_found() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client:
         response = await client.delete("/api/documents/nonexistent")
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_list_documents_isolated_per_client() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
+        await _upload_pdf(client_a, filename="a.pdf")
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
+        response = await client_b.get("/api/documents")
+
+    assert response.status_code == 200
+    assert response.json()["documents"] == []
+
+
+@pytest.mark.asyncio
+async def test_process_document_not_owner_returns_404() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
+        doc = await _upload_pdf(client_a)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
+        response = await client_b.post(f"/api/documents/{doc['id']}/process")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_embed_document_not_owner_returns_404() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
+        doc = await _upload_pdf(client_a)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
+        response = await client_b.post(f"/api/documents/{doc['id']}/embed")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_document_not_owner_returns_404() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_A) as client_a:
+        doc = await _upload_pdf(client_a)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=CLIENT_B) as client_b:
+        response = await client_b.delete(f"/api/documents/{doc['id']}")
+
+    assert response.status_code == 404
+    assert doc["id"] in _documents
+
+
+@pytest.mark.asyncio
+async def test_missing_client_id_header_rejected() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/documents")
+
+    assert response.status_code == 422
